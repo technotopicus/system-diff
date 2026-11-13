@@ -1,0 +1,50 @@
+{
+  "title": "Let customers cancel a paid order",
+  "source": "Pull request 517",
+  "statechart": {
+    "subject": "an order",
+    "states": [
+      { "id": "placed", "label": "Placed", "column": 1, "row": 1 },
+      { "id": "paid", "label": "Paid", "column": 2, "row": 1 },
+      { "id": "shipped", "label": "Shipped", "column": 3, "row": 1 },
+      { "id": "delivered", "label": "Delivered", "column": 4, "row": 1, "tone": "good" },
+      { "id": "cancelled", "label": "Cancelled", "column": 2, "row": 2, "change": "added", "evidence": "orders/status.ts:9" },
+      { "id": "refunded", "label": "Refunded", "column": 3, "row": 2, "tone": "good", "change": "added", "evidence": "orders/status.ts:10" }
+    ],
+    "transitions": [
+      { "from": "start", "to": "placed" },
+      { "from": "placed", "to": "paid", "label": "payment clears" },
+      { "from": "paid", "to": "shipped", "label": "warehouse ships" },
+      { "from": "shipped", "to": "delivered", "label": "courier delivers" },
+      { "from": "paid", "to": "cancelled", "label": "customer cancels", "change": "added", "evidence": "api/orders/cancel.ts:21" },
+      { "from": "cancelled", "to": "refunded", "label": "refund succeeds", "change": "added", "evidence": "jobs/refund.ts:33" }
+    ]
+  },
+  "facts": [
+    { "label": "Cancelling an order", "before": "support ticket only", "after": "self-service until shipped", "tone": "good", "evidence": "api/orders/cancel.ts:14" }
+  ],
+  "failure": {
+    "path": ["placed", "paid", "cancelled"],
+    "effects": [{ "node": "cancelled", "text": "stuck if the refund fails", "tone": "bad" }],
+    "evidence": "jobs/refund.ts:41"
+  },
+  "beats": {
+    "title": { "say": "This change lets customers cancel an order they have paid for. Here is what it does to the system." },
+    "statesBefore": {
+      "caption": "Before: once an order was paid, it could only move on to shipping.",
+      "say": "Before, a paid order had one way forward: it shipped, and then it was delivered."
+    },
+    "statesAfter": {
+      "caption": "After: a paid order can be cancelled, and a cancelled order is refunded.",
+      "say": "After, the customer can cancel a paid order until it ships. A cancelled order is then refunded."
+    },
+    "failure": {
+      "caption": "New failure mode: if the refund fails, the order stays cancelled and unpaid back.",
+      "say": "There is one new way to fail. If the refund fails, nothing tries it again, and the order stays cancelled without the money going back."
+    },
+    "close": {
+      "caption": "An order can now end in two ways: delivered or refunded.",
+      "say": "The short version: an order can now end in two ways, delivered or refunded."
+    }
+  }
+}

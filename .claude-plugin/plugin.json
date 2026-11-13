@@ -1,0 +1,13 @@
+{
+  "name": "system-diff",
+  "version": "0.1.0",
+  "description": "Turn a pull request into a short video of what it changes in the system: components, flows, state and failure modes, not lines of code.",
+  "author": {
+    "name": "technotopicus",
+    "url": "https://github.com/technotopicus"
+  },
+  "repository": "https://github.com/technotopicus/system-diff",
+  "license": "MIT",
+  "keywords": ["pull-request", "code-review", "architecture", "video", "skills"],
+  "skills": ["./skills/system-diff", "./skills/setup-system-diff"]
+}

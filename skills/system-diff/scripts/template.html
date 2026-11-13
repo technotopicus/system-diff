@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>System diff</title>
+<style>
+:root {
+  --chrome: #fcfcfc;
+  --elevated: #ffffff;
+  --ink: #1c1c1c;
+  --ink-secondary: rgba(28, 28, 28, 0.68);
+  --ink-tertiary: rgba(28, 28, 28, 0.5);
+  --fill: rgba(28, 28, 28, 0.06);
+  --line: rgba(28, 28, 28, 0.34);
+  --ring: 0 0 0 1.5px rgba(28, 28, 28, 0.08), 0 8px 24px rgba(28, 28, 28, 0.05);
+  --green: #14c16f;
+  --green-text: #00854a;
+  --green-tint: rgba(20, 193, 111, 0.11);
+  --amber: #f59312;
+  --amber-text: #aa6300;
+  --amber-tint: rgba(245, 147, 18, 0.12);
+  --red: #e72e3b;
+  --red-text: #c82532;
+  --red-tint: rgba(251, 43, 62, 0.09);
+  --blue: #1680f3;
+  --blue-text: #0b6dd3;
+  --blue-tint: rgba(30, 134, 252, 0.1);
+}
+* { box-sizing: border-box; margin: 0; }
+html, body {
+  width: 1920px; height: 1080px; overflow: hidden;
+  background: var(--chrome); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.scene { position: absolute; inset: 0; opacity: 0; }
+.block { position: absolute; left: 160px; top: 50%; width: 1560px; }
+.block h1 { font-size: 96px; line-height: 1.06; font-weight: 600; letter-spacing: -0.03em; }
+.block p { margin-top: 30px; font-size: 40px; color: var(--ink-secondary); letter-spacing: -0.01em; }
+#close h1 { font-size: 80px; }
+
+.icon { display: block; flex: none; }
+.chip {
+  display: inline-flex; align-items: center; gap: 9px; height: 40px; padding: 0 16px 0 8px;
+  border-radius: 999px; font-size: 21px; font-weight: 500; white-space: nowrap;
+  background: var(--fill); color: var(--ink-secondary);
+}
+.chip .icon { width: 24px; height: 24px; }
+.chip.good { background: var(--green-tint); color: var(--green-text); }
+.chip.warn { background: var(--amber-tint); color: var(--amber-text); }
+.chip.bad { background: var(--red-tint); color: var(--red-text); }
+.chip.neutral { background: var(--blue-tint); color: var(--blue-text); }
+.chip.plain { padding: 0 20px; }
+#source { height: 48px; font-size: 25px; padding: 0 22px; margin-bottom: 34px; }
+#summary { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 44px; }
+#summary .chip { height: 56px; font-size: 28px; padding: 0 24px 0 12px; gap: 12px; }
+#summary .chip .icon { width: 34px; height: 34px; }
+
+#stage-title { position: absolute; left: 100px; top: 62px; width: 1300px; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
+#headings span { position: absolute; left: 100px; top: 106px; font-size: 23px; color: var(--ink-secondary); white-space: nowrap; }
+#switch { position: absolute; right: 100px; top: 54px; width: 312px; height: 64px; border-radius: 999px; background: var(--fill); }
+#switch span { position: absolute; top: 6px; width: 150px; height: 52px; line-height: 52px; text-align: center; font-size: 25px; font-weight: 500; color: var(--ink-secondary); }
+#switch span:nth-of-type(1) { left: 6px; }
+#switch span:nth-of-type(2) { left: 156px; }
+#thumb { position: absolute; left: 6px; top: 6px; width: 150px; height: 52px; border-radius: 999px; background: var(--ink); overflow: hidden; }
+#thumb-labels { position: absolute; left: -6px; top: -6px; width: 312px; height: 64px; }
+#thumb-labels span { color: #ffffff; }
+
+.diagram { position: absolute; inset: 0; transform-origin: 0 0; }
+.diagram > svg { position: absolute; inset: 0; overflow: visible; }
+.edge-line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; }
+.edge-label {
+  position: absolute; transform: translate(-50%, -50%); padding: 3px 12px; border-radius: 999px;
+  background: var(--chrome); font-size: 21px; font-weight: 500; color: var(--ink-secondary); white-space: nowrap;
+}
+.node { position: absolute; width: 280px; height: 116px; padding: 21px 26px; border-radius: 24px; background: var(--elevated); box-shadow: var(--ring); }
+.node-label { font-size: 29px; font-weight: 600; letter-spacing: -0.012em; line-height: 38px; white-space: nowrap; overflow: hidden; }
+.node-detail { position: relative; height: 30px; font-size: 21px; line-height: 30px; color: var(--ink-secondary); }
+.node-detail span { position: absolute; left: 0; top: 0; width: 100%; white-space: nowrap; overflow: hidden; }
+.pill { width: 232px; height: 76px; padding: 0 22px; border-radius: 38px; display: flex; align-items: center; }
+.pill-label { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; font-size: 26px; font-weight: 600; letter-spacing: -0.012em; white-space: nowrap; overflow: hidden; }
+.pill-label .icon { width: 26px; height: 26px; }
+.badge { position: absolute; right: -12px; top: -12px; width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 0 0 4px var(--chrome); }
+.badge .icon { width: 36px; height: 36px; }
+.pill .badge { right: 10px; top: -17px; }
+.effect { position: absolute; left: 18px; transform-origin: left center; }
+.effect .chip { box-shadow: 0 0 0 3px var(--chrome); }
+.effect .chip.good { background: #e3f6ec; }
+.effect .chip.warn { background: #fdf0df; }
+.effect .chip.bad { background: #fde8ea; }
+
+.fact { position: absolute; top: 748px; height: 148px; padding: 24px 28px; border-radius: 24px; background: var(--elevated); box-shadow: var(--ring); }
+.fact-label { font-size: 22px; line-height: 28px; color: var(--ink-secondary); white-space: nowrap; overflow: hidden; }
+.fact-value { position: absolute; left: 28px; right: 28px; top: 62px; height: 40px; font-size: 30px; line-height: 40px; font-weight: 600; letter-spacing: -0.012em; }
+.fact-value > div { position: absolute; left: 0; top: 0; width: 100%; display: flex; align-items: center; gap: 12px; white-space: nowrap; overflow: hidden; }
+.fact-value .icon { width: 30px; height: 30px; }
+.fact-was { position: absolute; left: 28px; right: 28px; top: 100px; font-size: 21px; line-height: 28px; color: var(--ink-tertiary); text-decoration: line-through; white-space: nowrap; overflow: hidden; }
+
+.caption {
+  position: absolute; left: 100px; top: 928px; max-width: 1720px; height: 86px; padding: 0 38px; border-radius: 43px;
+  display: flex; align-items: center; gap: 16px; background: var(--fill);
+  font-size: 34px; font-weight: 500; letter-spacing: -0.012em; white-space: nowrap; overflow: hidden;
+}
+.caption .icon { width: 38px; height: 38px; margin-left: -14px; }
+.caption.bad { background: var(--red-tint); color: var(--red-text); }
+</style>
+</head>
+<body>
+
+<section class="scene" id="title">
+  <div class="block">
+    <div class="chip plain" id="source"></div>
+    <h1 id="title-text"></h1>
+    <p>What it changes in the system</p>
+  </div>
+</section>
+
+<section class="scene" id="stage">
+  <div id="stage-title"></div>
+  <div id="switch"><span>Before</span><span>After</span><div id="thumb"><div id="thumb-labels"><span>Before</span><span>After</span></div></div></div>
+  <div id="headings"></div>
+  <div id="diagrams"></div>
+  <div id="facts"></div>
+  <div id="captions"></div>
+</section>
+
+<section class="scene" id="close">
+  <div class="block">
+    <h1 id="close-text"></h1>
+    <div id="summary"></div>
+  </div>
+</section>
+
+<script id="spec" type="application/json">__SYSTEM_DIFF_SPEC__</script>
+<script>
+const spec = JSON.parse(document.getElementById("spec").textContent);
+const CANVAS = { left: 100, width: 1720, top: 160 };
+const HEAD = 13;
+const KINDS = {
+  components: { width: 280, height: 116, radius: 24, rowGap: 84, spread: { horizontal: [30, 42], vertical: [64, 100] }, words: ["component", "components", "flow", "flows"] },
+  states: { width: 232, height: 76, radius: 38, rowGap: 120, spread: { horizontal: [44, 22], vertical: [64, 84] }, words: ["state", "states", "transition", "transitions"] },
+};
+const NORMALS = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
+const COLOURS = { ink: "#1c1c1c", line: "rgba(28, 28, 28, 0.42)", green: "#14c16f", amber: "#f59312", red: "#e72e3b", blue: "#1680f3", grey: "#8e8e8e" };
+const TONES = {
+  good: { glyph: "check", colour: COLOURS.green },
+  warn: { glyph: "bang", colour: COLOURS.amber },
+  bad: { glyph: "cross", colour: COLOURS.red },
+  neutral: { glyph: "arrow", colour: COLOURS.blue },
+};
+const GLYPHS = {
+  plus: "M12 7v10M7 12h10",
+  minus: "M7 12h10",
+  check: "M7.4 12.4l3 3 6.2-6.7",
+  bang: "M12 6.8v6.4M12 16.9v.2",
+  cross: "M8.4 8.4l7.2 7.2M15.6 8.4l-7.2 7.2",
+  arrow: "M7.4 12h9M13 8.4l3.6 3.6-3.6 3.6",
+};
+const RINGS = {
+  plain: "0 0 0 1.5px rgba(28, 28, 28, 0.08), 0 8px 24px rgba(28, 28, 28, 0.05)",
+  added: "0 0 0 2.5px rgba(20, 193, 111, 0.7), 0 8px 24px rgba(20, 193, 111, 0.1)",
+  failed: "0 0 0 2.5px rgba(231, 46, 59, 0.8), 0 8px 24px rgba(231, 46, 59, 0.1)",
+  removed: "0 0 0 1.5px rgba(28, 28, 28, 0.08)",
+};
+
+const element = (id) => document.getElementById(id);
+const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
+const icon = (glyph, colour) =>
+  `<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${colour}"/><path d="${GLYPHS[glyph]}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const chip = (tone, text) => `<div class="chip ${tone}">${icon(TONES[tone].glyph, TONES[tone].colour)}${escape(text)}</div>`;
+const clamp = (value) => Math.max(0, Math.min(1, value));
+const outExpo = (value) => (value >= 1 ? 1 : 1 - 2 ** (-10 * value));
+const outBack = (value) => 1 + 2.4 * (value - 1) ** 3 + 1.4 * (value - 1) ** 2;
+const ramp = (time, start, duration = 0.5, easing = outExpo) => easing(clamp((time - start) / duration));
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+const pop = (target, progress) => {
+  target.style.opacity = clamp(progress * 3);
+  target.style.transform = `scale(${0.6 + 0.4 * progress})`;
+};
+const overlaps = (first, second) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
+const bezier = ([start, first, second, end], position) => {
+  const rest = 1 - position;
+  const axis = (key) => rest ** 3 * start[key] + 3 * rest ** 2 * position * first[key] + 3 * rest * position ** 2 * second[key] + position ** 3 * end[key];
+  return { x: axis("x"), y: axis("y") };
+};
+
+const facts = spec.facts ?? [];
+const failure = spec.failure;
+const beats = spec.beats ?? {};
+const warnings = [];
+const fit = (target, minimum) => {
+  let size = parseFloat(getComputedStyle(target).fontSize);
+  while (target.scrollWidth > target.clientWidth && size > minimum) {
+    size -= 1;
+    target.style.fontSize = `${size}px`;
+  }
+  if (target.scrollWidth > target.clientWidth) warnings.push(`Text does not fit, shorten it: "${target.textContent.trim()}"`);
+};
+
+const views = [];
+if (spec.nodes?.length) views.push({ kind: "components", boxes: spec.nodes, links: spec.edges ?? [], beats: ["before", "after"], heading: spec.statechart ? "Components and flows" : "" });
+if (spec.statechart) views.push({ kind: "states", boxes: spec.statechart.states, links: spec.statechart.transitions ?? [], beats: ["statesBefore", "statesAfter"], heading: `The states of ${spec.statechart.subject}` });
+const failureView = failure ? views.find((view) => view.kind === (failure.path ? "states" : "components")) : null;
+const order = ["title", ...views.flatMap((view) => view.beats), ...(failure ? ["failure"] : []), "close"];
+const stageBeats = order.slice(1, -1);
+const owner = (name) => (name === "failure" ? failureView : views.find((view) => view.beats.includes(name)));
+
+element("title-text").textContent = spec.title;
+element("stage-title").textContent = spec.title;
+element("source").textContent = spec.source ?? "";
+element("source").style.display = spec.source ? "inline-flex" : "none";
+element("close-text").textContent = beats.close?.caption ?? spec.title;
+document.querySelectorAll(".scene").forEach((scene) => { scene.style.opacity = 1; });
+
+const diagrams = views.map((view, viewIndex) => {
+  const kind = KINDS[view.kind];
+  const { boxes, links } = view;
+  const isStates = view.kind === "states";
+  const [, , linkWord] = kind.words;
+  const failing = failureView === view ? failure : null;
+  const boxById = new Map(boxes.map((box) => [box.id, box]));
+  const flows = links.filter((link) => link.from !== "start");
+  const pathLinks = (failing?.path ?? []).slice(1).map((id, index) => flows.find((link) => link.from === failing.path[index] && link.to === id && link.change !== "removed"));
+  const failedBox = failing?.path ? failing.path.at(-1) : failing?.node;
+  const isFailedLink = (link) => failing?.edge && failing.edge.from === link.from && failing.edge.to === link.to;
+
+  const firstColumn = Math.min(...boxes.map((box) => box.column));
+  const firstRow = Math.min(...boxes.map((box) => box.row));
+  const columnCount = Math.max(...boxes.map((box) => box.column)) - firstColumn + 1;
+  const rowCount = Math.max(...boxes.map((box) => box.row)) - firstRow + 1;
+  const columnPitch = columnCount > 1 ? Math.min(480, (CANVAS.width - kind.width) / (columnCount - 1)) : 0;
+  const rowPitch = kind.height + kind.rowGap;
+  const bottom = viewIndex === 0 && facts.length ? 676 : 860;
+  const origin = {
+    x: CANVAS.left + (CANVAS.width - (columnCount - 1) * columnPitch - kind.width) / 2,
+    y: CANVAS.top + (bottom - CANVAS.top - (rowCount - 1) * rowPitch - kind.height) / 2,
+  };
+  const place = (box) => ({
+    x: origin.x + (box.column - firstColumn) * columnPitch,
+    y: origin.y + (box.row - firstRow) * rowPitch,
+  });
+  const rectangle = (box) => {
+    const position = place(box);
+    return { left: position.x, right: position.x + kind.width, top: position.y, bottom: position.y + kind.height };
+  };
+
+  const container = document.createElement("div");
+  container.className = "diagram";
+  container.innerHTML = `<svg viewBox="0 0 1920 1080"></svg><div></div><div></div>`;
+  element("diagrams").append(container);
+  const [canvas, labelLayer, boxLayer] = container.children;
+  const heading = document.createElement("span");
+  heading.textContent = view.heading;
+  element("headings").append(heading);
+
+  const boxViews = boxes.map((box) => {
+    const position = place(box);
+    const boxView = document.createElement("div");
+    boxView.className = isStates ? "node pill" : "node";
+    boxView.style.left = `${position.x}px`;
+    boxView.style.top = `${position.y}px`;
+    const changeBadge = { added: icon("plus", COLOURS.green), removed: icon("minus", COLOURS.grey), changed: icon("arrow", COLOURS.blue) }[box.change] ?? "";
+    const effect = failing?.effects?.find((candidate) => candidate.node === box.id);
+    const tone = TONES[box.tone];
+    const body = isStates
+      ? `<div class="pill-label">${tone ? icon(tone.glyph, tone.colour) : ""}<span></span></div>`
+      : `<div class="node-label">${escape(box.label)}</div>
+        <div class="node-detail"><span class="detail-before">${escape(box.detailBefore ?? box.detail)}</span><span class="detail-after">${escape(box.detail)}</span></div>`;
+    boxView.innerHTML = `${body}
+      <div class="badge change-badge">${changeBadge}</div>
+      <div class="badge failure-badge">${icon("cross", COLOURS.red)}</div>
+      ${effect ? `<div class="effect" style="top: ${kind.height - 20}px">${chip(effect.tone ?? "bad", effect.text)}</div>` : ""}`;
+    boxLayer.append(boxView);
+    if (isStates) {
+      for (const text of [box.label, box.labelBefore ?? box.label]) {
+        boxView.querySelector(".pill-label span").textContent = text;
+        fit(boxView.querySelector(".pill-label"), 19);
+      }
+    } else {
+      fit(boxView.querySelector(".node-label"), 22);
+      boxView.querySelectorAll(".node-detail span").forEach((target) => fit(target, 17));
+    }
+    return { box, boxView, effectIndex: failing?.effects?.indexOf(effect) ?? -1 };
+  });
+
+  const sidesFor = (link) => {
+    const source = boxById.get(link.from);
+    const target = boxById.get(link.to);
+    if (source === target) return rowCount > 1 && source.row === firstRow + rowCount - 1 ? ["bottom", "bottom"] : ["top", "top"];
+    const blocked = (along, across) =>
+      boxes.some((box) => !(link.change === "removed" && box.change === "added") && box[across] === source[across] && (box[along] - source[along]) * (box[along] - target[along]) < 0);
+    const outer = (index, first, total, fallback) => (total > 1 && index === first) || (fallback && !(total > 1 && index === first + total - 1));
+    if (source.row === target.row && blocked("column", "row")) return outer(source.row, firstRow, rowCount, target.column > source.column) ? ["top", "top"] : ["bottom", "bottom"];
+    if (source.column === target.column && blocked("row", "column")) return outer(source.column, firstColumn, columnCount, target.row < source.row) ? ["left", "left"] : ["right", "right"];
+    if (target.column > source.column) return ["right", "left"];
+    if (target.column < source.column) return ["left", "right"];
+    return target.row > source.row ? ["bottom", "top"] : ["top", "bottom"];
+  };
+  const ends = flows.filter((link) => link.from !== link.to).flatMap((link) => {
+    const source = boxById.get(link.from);
+    const target = boxById.get(link.to);
+    const [sourceSide, targetSide] = sidesFor(link);
+    const along = sourceSide === "left" || sourceSide === "right" ? "row" : "column";
+    const rank = (distance) => (sourceSide === targetSide ? 1 / distance : distance);
+    return [
+      { link, role: "from", box: source, side: sourceSide, rank: rank(target[along] - source[along]), straight: source[along] === target[along] },
+      { link, role: "to", box: target, side: targetSide, rank: rank(source[along] - target[along]), straight: source[along] === target[along] },
+    ];
+  });
+  const portOffsets = new Map();
+  for (const group of Map.groupBy(ends, (end) => `${end.box.id}:${end.side}`).values()) {
+    const horizontal = group[0].side === "left" || group[0].side === "right";
+    const [spacing, furthest] = kind.spread[horizontal ? "horizontal" : "vertical"];
+    group.sort((first, second) => first.rank - second.rank);
+    for (const end of group) {
+      const peers = group.filter((peer) => (end.link.change === "removed" ? peer.link.change !== "added" : peer.link.change !== "removed"));
+      const straight = peers.flatMap((peer, index) => (peer.straight ? [index] : []));
+      const centre = straight.length ? (straight[0] + straight.at(-1)) / 2 : (peers.length - 1) / 2;
+      const offset = (peers.indexOf(end) - centre) * spacing;
+      portOffsets.set(`${links.indexOf(end.link)}:${end.role}`, Math.max(-furthest, Math.min(furthest, offset)));
+    }
+  }
+  const port = (box, side, offset) => {
+    const position = place(box);
+    const middle = { x: position.x + kind.width / 2, y: position.y + kind.height / 2 };
+    const horizontal = side === "left" || side === "right";
+    const pastCorner = Math.abs(offset) - ((horizontal ? kind.height : kind.width) / 2 - kind.radius);
+    const inset = pastCorner > 0 ? kind.radius - Math.sqrt(Math.max(0, kind.radius ** 2 - pastCorner ** 2)) : 0;
+    if (side === "left") return { x: position.x + inset, y: middle.y + offset };
+    if (side === "right") return { x: position.x + kind.width - inset, y: middle.y + offset };
+    if (side === "top") return { x: middle.x + offset, y: position.y + inset };
+    return { x: middle.x + offset, y: position.y + kind.height - inset };
+  };
+
+  const linkViews = links.map((link, index) => {
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    canvas.append(group);
+    if (link.from === "start") {
+      const position = place(boxById.get(link.to));
+      const x = position.x + 40;
+      group.innerHTML = `<circle cx="${x}" cy="${position.y - 40}" r="8"/><path class="edge-line" pathLength="1" d="M${x} ${position.y - 32} L${x} ${position.y - HEAD}"/><polygon points="${x},${position.y} ${x - 7.5},${position.y - HEAD} ${x + 7.5},${position.y - HEAD}"/>`;
+      return { link, line: group.querySelector("path"), head: group.querySelector("polygon"), dot: group.querySelector("circle"), points: [{ x, y: position.y - 50 }] };
+    }
+    const source = boxById.get(link.from);
+    const target = boxById.get(link.to);
+    const [sourceSide, targetSide] = sidesFor(link);
+    const loops = source === target;
+    const sourceOffset = loops ? -26 : portOffsets.get(`${index}:from`);
+    const start = port(source, sourceSide, sourceOffset);
+    const end = port(target, targetSide, loops ? 26 : portOffsets.get(`${index}:to`));
+    const startNormal = NORMALS[sourceSide];
+    const endNormal = NORMALS[targetSide];
+    const horizontal = sourceSide === "left" || sourceSide === "right";
+    const base = { x: end.x + endNormal.x * HEAD, y: end.y + endNormal.y * HEAD };
+    const steps = Math.abs(target.column - source.column) + Math.abs(target.row - source.row);
+    const reach = loops ? 70 : sourceSide === targetSide ? 40 + 34 * steps : Math.max(40, (horizontal ? Math.abs(base.x - start.x) : Math.abs(base.y - start.y)) / 2);
+    const flare = loops ? 30 : 0;
+    const curve = [
+      start,
+      { x: start.x + startNormal.x * reach - flare, y: start.y + startNormal.y * reach },
+      { x: base.x + endNormal.x * reach + flare, y: base.y + endNormal.y * reach },
+      base,
+    ];
+    const head = [end, { x: base.x - endNormal.y * 7.5, y: base.y + endNormal.x * 7.5 }, { x: base.x + endNormal.y * 7.5, y: base.y - endNormal.x * 7.5 }];
+    group.innerHTML = `<path class="edge-line" pathLength="1" d="M${curve[0].x} ${curve[0].y} C${curve[1].x} ${curve[1].y} ${curve[2].x} ${curve[2].y} ${curve[3].x} ${curve[3].y}"/><polygon points="${head.map((point) => `${point.x},${point.y}`).join(" ")}"/>`;
+    const points = Array.from({ length: 21 }, (_, step) => bezier(curve, step / 20));
+    const linkView = { link, line: group.querySelector("path"), head: group.querySelector("polygon"), points };
+    if (!link.label) return linkView;
+    const label = document.createElement("div");
+    label.className = "edge-label";
+    const returning = flows.some((other) => other.from === link.to && other.to === link.from && !(other.change === "added" && link.change === "removed") && !(other.change === "removed" && link.change === "added"));
+    label.style.left = `${points[10].x}px`;
+    label.style.top = `${points[10].y + (loops ? startNormal.y * 22 : 0)}px`;
+    if (returning && !horizontal && sourceSide !== targetSide) {
+      label.style.left = `${points[10].x + Math.sign(sourceOffset) * 4}px`;
+      label.style.top = `${(start.y + end.y) / 2}px`;
+      label.style.transform = sourceOffset < 0 ? "translate(-100%, -50%)" : "translate(0, -50%)";
+    }
+    label.innerHTML = `<span>${escape(link.labelBefore ?? link.label)}</span>`;
+    labelLayer.append(label);
+    const labelBox = label.getBoundingClientRect();
+    if (sourceSide !== targetSide && (horizontal ? labelBox.width > Math.abs(base.x - start.x) - 28 : labelBox.height > Math.abs(base.y - start.y) - 28)) {
+      warnings.push(`The ${linkWord} label "${link.label}" (${link.from} to ${link.to}) leaves no line showing. Shorten it, or put its boxes further apart.`);
+    }
+    return { ...linkView, label };
+  });
+
+  const together = (first, second) => !(first.change === "removed" && second.change === "added") && !(first.change === "added" && second.change === "removed");
+  linkViews.forEach(({ link, label, points }, index) => {
+    if (link.from === "start") return;
+    const labelBox = label?.getBoundingClientRect();
+    boxViews.forEach(({ box }) => {
+      if (link.change === "removed" && box.change === "added") return;
+      if (labelBox && overlaps(labelBox, rectangle(box))) {
+        warnings.push(`The ${linkWord} label "${link.label}" (${link.from} to ${link.to}) overlaps "${box.label}". Shorten the label or move a box.`);
+      }
+      if (box.id === link.from || box.id === link.to) return;
+      const area = rectangle(box);
+      if (points.some((point) => point.x > area.left && point.x < area.right && point.y > area.top && point.y < area.bottom)) {
+        warnings.push(`The ${linkWord} ${link.from} to ${link.to} runs through "${box.label}". Move a box to another row or column.`);
+      }
+    });
+    linkViews.slice(index + 1).forEach((other) => {
+      if (labelBox && other.label && together(link, other.link) && overlaps(labelBox, other.label.getBoundingClientRect())) {
+        warnings.push(`The ${linkWord} labels "${link.label}" and "${other.link.label}" overlap. Shorten them or move a box.`);
+      }
+    });
+  });
+  boxViews.forEach(({ box, boxView }) => {
+    const effect = boxView.querySelector(".effect");
+    if (!effect) return;
+    linkViews.forEach(({ link, label }) => {
+      if (label && link.change !== "removed" && overlaps(effect.getBoundingClientRect(), label.getBoundingClientRect())) {
+        warnings.push(`The failure note on "${box.label}" covers the ${linkWord} label "${link.label}". Shorten the note.`);
+      }
+    });
+  });
+
+  const extent = boxes.map(rectangle);
+  linkViews.forEach(({ label, points }) => {
+    extent.push(...points.map((point) => ({ left: point.x, right: point.x, top: point.y, bottom: point.y })));
+    if (label) extent.push(label.getBoundingClientRect());
+  });
+  const bounds = {
+    left: Math.min(...extent.map((area) => area.left)),
+    right: Math.max(...extent.map((area) => area.right)),
+    top: Math.min(...extent.map((area) => area.top)),
+    bottom: Math.max(...extent.map((area) => area.bottom)),
+  };
+  const scale = Math.min(1.45, CANVAS.width / (bounds.right - bounds.left), (bottom - CANVAS.top) / (bounds.bottom - bounds.top));
+  const shift = {
+    x: CANVAS.left + CANVAS.width / 2 - (scale * (bounds.left + bounds.right)) / 2,
+    y: (CANVAS.top + bottom) / 2 - (scale * (bounds.top + bounds.bottom)) / 2,
+  };
+  container.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${scale})`;
+
+  const sourceColumn = (link) => (link.from === "start" ? boxById.get(link.to).column - 1 : boxById.get(link.from).column);
+  const addedLinkOrder = links.filter((link) => link.change === "added").sort((first, second) => sourceColumn(first) - sourceColumn(second));
+  const addedBoxOrder = boxes.filter((box) => box.change === "added").sort((first, second) => first.column - second.column);
+  const flipsStart = Math.max(2.2, 1.3 + addedBoxOrder.length * 0.25 + addedLinkOrder.length * 0.35 + 0.5);
+  const failureLength = 1.4 + pathLinks.length * 0.35 + (failing?.effects?.length ?? 0) * 0.3 + 1.8;
+
+  const render = (time, before, after, failingAt) => {
+    const failedAt = failingAt + 0.4 + pathLinks.length * 0.35;
+    const failed = ramp(time, failedAt, 0.45);
+    const dimmed = failing?.path ? ramp(time, failingAt + 0.4, 0.45) : 0;
+
+    boxViews.forEach(({ box, boxView, effectIndex }) => {
+      const isFailed = failedBox === box.id;
+      let opacity = ramp(time, before + 0.1 + (box.column - firstColumn) * 0.07, 0.5);
+      let transform = `translateY(${(1 - opacity) * 12}px)`;
+      let ring = RINGS.plain;
+      if (box.change === "added") {
+        const arrived = ramp(time, after + 1.0 + addedBoxOrder.indexOf(box) * 0.25, 0.6, outBack);
+        opacity = clamp(arrived * 2.5);
+        transform = `scale(${0.88 + 0.12 * arrived})`;
+        ring = RINGS.added;
+      }
+      if (box.change === "removed") {
+        const removed = ramp(time, after + 0.7, 0.5);
+        opacity *= 1 - 0.6 * removed;
+        if (removed > 0.5) ring = RINGS.removed;
+      }
+      if (failing?.path && !failing.path.includes(box.id)) opacity *= 1 - 0.5 * dimmed;
+      const changed = box.change === "changed" ? ramp(time, after + 1.0, 0.5) : 1;
+      boxView.style.opacity = opacity;
+      boxView.style.transform = transform;
+      boxView.style.boxShadow = isFailed && failed > 0.3 ? RINGS.failed : ring;
+      if (isStates) {
+        boxView.querySelector(".pill-label span").textContent = changed < 0.5 ? box.labelBefore ?? box.label : box.label;
+      } else {
+        boxView.querySelector(".detail-before").style.opacity = 1 - changed;
+        boxView.querySelector(".detail-after").style.opacity = changed;
+      }
+      const badgeAt = box.change === "added" ? after + 1.2 + addedBoxOrder.indexOf(box) * 0.25 : box.change === "removed" ? after + 0.8 : after + 1.1;
+      pop(boxView.querySelector(".change-badge"), box.change ? ramp(time, badgeAt, 0.45, outBack) * (isFailed ? 1 - failed : 1) : 0);
+      pop(boxView.querySelector(".failure-badge"), isFailed ? ramp(time, failedAt, 0.45, outBack) : 0);
+      const effect = boxView.querySelector(".effect");
+      if (effect) pop(effect, ramp(time, failedAt + 0.6 + effectIndex * 0.3, 0.45, outBack));
+    });
+
+    linkViews.forEach(({ link, line, head, label, dot }) => {
+      let drawn = ramp(time, before + 0.45, 0.7);
+      let colour = COLOURS.line;
+      let labelColour = "var(--ink-secondary)";
+      let opacity = 1;
+      if (link.change === "added") {
+        drawn = ramp(time, after + 1.3 + addedBoxOrder.length * 0.25 + addedLinkOrder.indexOf(link) * 0.35, 0.65);
+        colour = COLOURS.green;
+        labelColour = "var(--green-text)";
+      }
+      if (link.change === "removed") {
+        const removed = ramp(time, after + 0.45, 0.6);
+        drawn *= 1 - removed;
+        if (removed > 0) colour = COLOURS.red;
+      }
+      if (link.change === "changed") {
+        const changed = ramp(time, after + 1.0, 0.5);
+        label.firstElementChild.textContent = changed < 0.5 ? link.labelBefore ?? link.label : link.label;
+        if (changed >= 0.5) labelColour = "var(--blue-text)";
+      }
+      const walked = pathLinks.includes(link) && ramp(time, failingAt + 0.4 + pathLinks.indexOf(link) * 0.35, 0.35) > 0.3;
+      if (walked || (isFailedLink(link) && failed > 0.3)) {
+        colour = COLOURS.red;
+        labelColour = "var(--red-text)";
+      }
+      if (failing?.path && !pathLinks.includes(link)) opacity = 1 - 0.6 * dimmed;
+      if (failing?.node && (link.from === failing.node || link.to === failing.node)) opacity = 1 - 0.75 * failed;
+      line.style.stroke = colour;
+      line.style.strokeDashoffset = 1 - drawn;
+      line.style.opacity = drawn > 0 ? opacity : 0;
+      head.style.fill = colour;
+      head.style.opacity = clamp((drawn - 0.92) / 0.08) * opacity;
+      if (dot) {
+        dot.style.fill = colour === COLOURS.line ? COLOURS.ink : colour;
+        dot.style.opacity = clamp(drawn * 4) * opacity;
+      }
+      if (label) {
+        label.style.opacity = clamp((drawn - 0.35) / 0.3);
+        label.style.color = labelColour;
+        label.firstElementChild.style.opacity = opacity;
+      }
+    });
+  };
+  return { view, container, heading, flipsStart, failureLength, render };
+});
+
+const factGap = 24;
+const factWidth = facts.length ? Math.min(560, (CANVAS.width - (facts.length - 1) * factGap) / facts.length) : 0;
+const factViews = facts.map((fact, index) => {
+  const tone = TONES[fact.tone ?? "neutral"];
+  const factView = document.createElement("div");
+  factView.className = "fact";
+  factView.style.left = `${CANVAS.left + index * (factWidth + factGap)}px`;
+  factView.style.width = `${factWidth}px`;
+  factView.innerHTML = `
+    <div class="fact-label">${escape(fact.label)}</div>
+    <div class="fact-value"><div class="value-before">${escape(fact.before)}</div><div class="value-after">${icon(tone.glyph, tone.colour)}<span>${escape(fact.after)}</span></div></div>
+    <div class="fact-was">${escape(fact.before)}</div>`;
+  element("facts").append(factView);
+  return factView;
+});
+
+const captionBeats = stageBeats.filter((name) => beats[name]?.caption);
+const captionViews = new Map(captionBeats.map((name) => {
+  const captionView = document.createElement("div");
+  captionView.className = name === "failure" ? "caption bad" : "caption";
+  captionView.innerHTML = `${name === "failure" ? icon("bang", COLOURS.red) : ""}<span>${escape(beats[name].caption)}</span>`;
+  element("captions").append(captionView);
+  return [name, captionView];
+}));
+
+const count = (list, change) => list.filter((item) => item.change === change && item.from !== "start").length;
+const summary = [
+  ...views.flatMap((view) => {
+    const [box, boxes, link, links] = KINDS[view.kind].words;
+    return [
+      ["good", count(view.boxes, "added"), `new ${box}`, `new ${boxes}`],
+      ["neutral", count(view.boxes, "changed"), `${box} changed`, `${boxes} changed`],
+      ["plain", count(view.boxes, "removed"), `${box} removed`, `${boxes} removed`],
+      ["good", count(view.links, "added"), `new ${link}`, `new ${links}`],
+      ["neutral", count(view.links, "changed"), `${link} changed`, `${links} changed`],
+      ["plain", count(view.links, "removed"), `${link} removed`, `${links} removed`],
+    ];
+  }),
+  ["neutral", facts.length, "fact changed", "facts changed"],
+  ["bad", failure ? 1 : 0, "new failure mode", "new failure modes"],
+].filter(([, total]) => total > 0);
+element("summary").innerHTML = summary
+  .map(([tone, total, one, many]) => {
+    if (tone === "plain") return `<div class="chip">${icon("minus", COLOURS.grey)}${plural(total, one, many)}</div>`;
+    const glyph = tone === "good" ? "plus" : TONES[tone].glyph;
+    return `<div class="chip ${tone}">${icon(glyph, TONES[tone].colour)}${plural(total, one, many)}</div>`;
+  })
+  .join("");
+const summaryViews = [...element("summary").children];
+
+document.querySelectorAll(".fact-label, .fact-was").forEach((target) => fit(target, 17));
+document.querySelectorAll(".fact-value > div").forEach((target) => fit(target, 22));
+document.querySelectorAll(".caption").forEach((target) => fit(target, 27));
+fit(element("stage-title"), 22);
+if (element("title-text").getBoundingClientRect().height > 330) warnings.push("The title runs past three lines, shorten it.");
+
+const readingTime = (name) => (beats[name]?.caption ?? "").split(/\s+/).filter(Boolean).length / 2.6 + 1.6;
+const minimumDurations = () => {
+  const durations = { title: 2.6, close: Math.max(3.6, readingTime("close")) };
+  diagrams.forEach((diagram, index) => {
+    const [before, after] = diagram.view.beats;
+    durations[before] = Math.max(3.6, readingTime(before));
+    durations[after] = Math.max(diagram.flipsStart + (index === 0 ? facts.length * 0.4 : 0) + 1.4, readingTime(after));
+  });
+  if (failure) durations.failure = Math.max(diagrams.find((diagram) => diagram.view === failureView).failureLength, readingTime("failure"));
+  return durations;
+};
+let starts = {};
+let total = 0;
+const setDurations = (durations) => {
+  total = 0;
+  starts = {};
+  for (const name of order) {
+    starts[name] = total;
+    total += durations[name];
+  }
+  starts.failure ??= Infinity;
+  return total;
+};
+setDurations(minimumDurations());
+
+const visibility = (view, time) =>
+  stageBeats.reduce((shown, name, index) => {
+    if (owner(name) !== view) return shown;
+    return shown + ramp(time, starts[name], 0.35) * (1 - ramp(time, starts[stageBeats[index + 1]] ?? Infinity, 0.35));
+  }, 0);
+
+function render(time) {
+  const opening = starts[stageBeats[0]];
+  element("title").style.opacity = 1 - ramp(time, opening - 0.3, 0.3);
+  element("title").firstElementChild.style.transform = `translateY(calc(-50% - ${ramp(time, opening - 0.3, 0.3) * 24}px))`;
+  element("stage").style.opacity = ramp(time, opening, 0.35) * (1 - ramp(time, starts.close, 0.35));
+
+  let switched = 0;
+  diagrams.forEach((diagram, index) => {
+    const [before, after] = diagram.view.beats.map((name) => starts[name]);
+    const shown = visibility(diagram.view, time);
+    diagram.container.style.opacity = shown;
+    diagram.heading.style.opacity = shown;
+    diagram.render(time, before, after, failureView === diagram.view ? starts.failure : Infinity);
+    switched += ramp(time, after + 0.1, 0.7, outBack) - (index > 0 ? ramp(time, before, 0.5) : 0);
+  });
+  element("thumb").style.transform = `translateX(${switched * 150}px)`;
+  element("thumb-labels").style.transform = `translateX(${-switched * 150}px)`;
+
+  const [factsBefore, factsAfter] = views[0].beats.map((name) => starts[name]);
+  element("facts").style.opacity = visibility(views[0], time);
+  factViews.forEach((factView, index) => {
+    const arrived = ramp(time, factsBefore + 0.3 + index * 0.08, 0.5);
+    const flipsAt = factsAfter + diagrams[0].flipsStart + index * 0.4;
+    const flipped = ramp(time, flipsAt, 0.55);
+    factView.style.opacity = arrived;
+    factView.style.transform = `translateY(${(1 - arrived) * 12}px)`;
+    factView.querySelector(".fact-value").style.transform = `translateY(${(1 - flipped) * 14}px)`;
+    factView.querySelector(".value-before").style.opacity = 1 - clamp(flipped * 2);
+    factView.querySelector(".value-after").style.opacity = clamp(flipped * 2 - 0.6);
+    factView.querySelector(".value-after .icon").style.transform = `scale(${ramp(time, flipsAt + 0.15, 0.45, outBack)})`;
+    factView.querySelector(".fact-was").style.opacity = clamp(flipped * 2 - 0.8);
+  });
+
+  captionBeats.forEach((name, index) => {
+    const next = captionBeats[index + 1];
+    const arrived = ramp(time, starts[name] + 0.25, 0.5);
+    const left = next ? ramp(time, starts[next], 0.2) : 0;
+    const captionView = captionViews.get(name);
+    captionView.style.opacity = arrived * (1 - left);
+    captionView.style.transform = `translateY(${(1 - arrived) * 18}px)`;
+  });
+
+  const closing = ramp(time, starts.close + 0.3, 0.6);
+  element("close").style.opacity = closing;
+  element("close").firstElementChild.style.transform = `translateY(calc(-50% + ${(1 - closing) * 24}px))`;
+  summaryViews.forEach((summaryView, index) => pop(summaryView, ramp(time, starts.close + 0.9 + index * 0.12, 0.45, outBack)));
+}
+
+window.SystemDiff = {
+  order,
+  warnings,
+  minimumDurations,
+  setDurations,
+  render,
+  stills: () => order.map((name, index) => ({ name, time: (order[index + 1] ? starts[order[index + 1]] : total) - 0.4 })),
+};
+render(0);
+if (location.hash === "#play") {
+  const began = performance.now();
+  const tick = () => {
+    render(((performance.now() - began) / 1000) % (total + 1));
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+</script>
+</body>
+</html>

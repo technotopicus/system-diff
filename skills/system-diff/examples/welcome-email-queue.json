@@ -1,0 +1,75 @@
+{
+  "title": "Send welcome emails through a queue",
+  "source": "Pull request 482",
+  "nodes": [
+    { "id": "signup", "label": "Signup API", "detail": "POST /signup", "column": 1, "row": 1, "evidence": "api/signup.ts:38" },
+    { "id": "queue", "label": "Email queue", "detail": "email_jobs table", "column": 2, "row": 1, "change": "added", "evidence": "db/migrations/0042_email_jobs.sql:1" },
+    { "id": "worker", "label": "Email worker", "detail": "polls every 5 s", "column": 3, "row": 1, "change": "added", "evidence": "workers/email.ts:12" },
+    { "id": "provider", "label": "Email provider", "detail": "external API", "column": 4, "row": 1, "evidence": "lib/mailer.ts:7" }
+  ],
+  "edges": [
+    { "from": "signup", "to": "provider", "label": "send and wait", "change": "removed", "evidence": "base api/signup.ts:44" },
+    { "from": "signup", "to": "queue", "label": "add a job", "change": "added", "evidence": "api/signup.ts:52" },
+    { "from": "queue", "to": "worker", "label": "next job", "change": "added", "evidence": "workers/email.ts:19" },
+    { "from": "worker", "to": "provider", "label": "send", "change": "added", "evidence": "workers/email.ts:31" }
+  ],
+  "statechart": {
+    "subject": "a welcome email",
+    "states": [
+      { "id": "queued", "label": "Queued", "column": 1, "row": 2, "change": "added", "evidence": "api/signup.ts:52" },
+      { "id": "sending", "label": "Sending", "column": 2, "row": 2 },
+      { "id": "sent", "label": "Sent", "column": 3, "row": 2, "tone": "good" },
+      { "id": "waiting", "label": "Waiting to retry", "column": 2, "row": 1, "change": "added", "evidence": "workers/email.ts:40" },
+      { "id": "failed", "label": "Marked failed", "labelBefore": "Lost", "column": 3, "row": 3, "tone": "bad", "change": "changed", "evidence": ["workers/email.ts:47", "base api/signup.ts:46"] }
+    ],
+    "transitions": [
+      { "from": "start", "to": "sending", "change": "removed", "evidence": "base api/signup.ts:44" },
+      { "from": "start", "to": "queued", "change": "added", "evidence": "api/signup.ts:52" },
+      { "from": "queued", "to": "sending", "label": "worker takes it", "change": "added", "evidence": "workers/email.ts:19" },
+      { "from": "sending", "to": "sent", "label": "provider accepts" },
+      { "from": "sending", "to": "waiting", "label": "the send fails", "change": "added", "evidence": "workers/email.ts:40" },
+      { "from": "waiting", "to": "sending", "label": "a minute passes", "change": "added", "evidence": "workers/email.ts:43" },
+      { "from": "sending", "to": "failed", "label": "third try fails", "labelBefore": "the send fails", "change": "changed", "evidence": ["workers/email.ts:47", "base api/signup.ts:46"] }
+    ]
+  },
+  "facts": [
+    { "label": "Signup response", "before": "waits for the email", "after": "returns right away", "tone": "good", "evidence": ["api/signup.ts:52", "base api/signup.ts:44"] },
+    { "label": "Provider outage", "before": "breaks signup", "after": "emails wait in the queue", "tone": "good", "evidence": "api/signup.ts:52" }
+  ],
+  "failure": {
+    "node": "worker",
+    "effects": [
+      { "node": "signup", "text": "still succeeds", "tone": "good" },
+      { "node": "queue", "text": "jobs pile up unseen", "tone": "warn" },
+      { "node": "provider", "text": "no emails go out", "tone": "bad" }
+    ],
+    "evidence": "workers/email.ts:12"
+  },
+  "beats": {
+    "title": { "say": "This change sends welcome emails through a queue. Here is what it does to the system." },
+    "before": {
+      "caption": "Before: signup sends the welcome email itself, and waits for it.",
+      "say": "Before, the signup API called the email provider directly, and every new user waited for that call."
+    },
+    "after": {
+      "caption": "After: signup adds a job to a queue, and a worker sends the email.",
+      "say": "After, signup only adds a job to a queue and returns. A new worker takes the job and sends the email."
+    },
+    "statesBefore": {
+      "caption": "Before: an email was sent once. If the send failed, the email was lost.",
+      "say": "Now follow one email. Before, it was sent once, and a failed send was simply lost."
+    },
+    "statesAfter": {
+      "caption": "After: an email waits in the queue, and a failed send is tried again.",
+      "say": "After, it waits in the queue first. A failed send is tried again, and after three failures the email is marked as failed."
+    },
+    "failure": {
+      "caption": "New failure mode: if the worker stops, emails pile up and nobody notices.",
+      "say": "There is one new way to fail. If the worker stops, signups still succeed, but emails pile up in the queue and nobody notices."
+    },
+    "close": {
+      "caption": "Signup no longer depends on the email provider.",
+      "say": "The short version: signup no longer depends on the email provider."
+    }
+  }
+}

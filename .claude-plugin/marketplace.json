@@ -1,0 +1,17 @@
+{
+  "name": "technotopicus",
+  "owner": {
+    "name": "technotopicus",
+    "url": "https://github.com/technotopicus"
+  },
+  "description": "Agent skills by technotopicus.",
+  "plugins": [
+    {
+      "name": "system-diff",
+      "source": "./",
+      "description": "Turn a pull request into a short video of what it changes in the system.",
+      "category": "engineering",
+      "keywords": ["pull-request", "code-review", "architecture", "video"]
+    }
+  ]
+}
